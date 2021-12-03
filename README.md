@@ -1,2 +1,2 @@
-# quadraped-robot
-Quadraped Robot for capstone project
+# quadruped-robot
+Quadruped Robot for capstone project
