@@ -1,2 +1,11 @@
+# Ignore notebooks checkpoints
 .ipynb_checkpoints
 */.ipynb_checkpoints/*
+
+# Ignore video captures
+*.avi
+
+# Ignore Pi saves
+*.py.save
+*.pyc
+__pycache__/
