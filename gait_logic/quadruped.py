@@ -8,7 +8,7 @@ import curses
 import os
 
 class Motor(IntEnum):
-    # may be useful for tuning specific motors
+    # identifies the corresponding pin location with the motor location
     FR_SHOULDER = 0
     FR_ELBOW = 1
     FR_HIP = 2
@@ -27,24 +27,53 @@ class Quadruped:
         self.lower_leg_length = 10.5
         for i in range(10):
             self.kit.servo[i].set_pulse_width_range(500,2500)
-        
+
+    def set_angle(self,motor_id, degrees):
+        """
+        set the angle of a specific motor to a given angle
+        :param motor_id: the motor id
+        :param degrees: the angle to put the motor to
+        :returns: void
+        """
+        self.kit.servo[motor_id].angle = degrees
+
+    def rad_to_degree(self,rad):
+        """
+        Converts radians to degrees
+        :param rad: radians
+        :returns: the corresponding degrees as a float
+        """
+        return rad*180/math.pi
+
     def calibrate(self):
-        # set the robot into the default "middle position" use this for attaching legs in right location
-        self.kit.servo[Motor.FR_SHOULDER].angle = 60
-        self.kit.servo[Motor.FR_ELBOW].angle = 90
-        self.kit.servo[Motor.FR_HIP].angle = 90
-        self.kit.servo[Motor.FL_SHOULDER].angle = 120
-        self.kit.servo[Motor.FL_ELBOW].angle = 90
-        self.kit.servo[Motor.FL_HIP].angle = 90
-        self.kit.servo[Motor.BR_SHOULDER].angle = 60
-        self.kit.servo[Motor.BR_ELBOW].angle = 90
-        self.kit.servo[Motor.BL_SHOULDER].angle = 120
-        self.kit.servo[Motor.BL_ELBOW].angle = 90    
+        """
+        sets the robot into the default "middle position" use this for attaching legs in right location
+        :returns: void
+        """
+        self.set_angle(Motor.FR_SHOULDER, 60)
+        self.set_angle(Motor.FR_ELBOW, 90)
+        self.set_angle(Motor.FR_HIP, 90)
+        self.set_angle(Motor.FL_SHOULDER, 120)
+        self.set_angle(Motor.FL_ELBOW, 90)
+        self.set_angle(Motor.FL_HIP, 90)
+        self.set_angle(Motor.BR_SHOULDER, 60)
+        self.set_angle(Motor.BR_ELBOW, 90)
+        self.set_angle(Motor.BL_SHOULDER, 120)
+        self.set_angle(Motor.BL_ELBOW, 90)    
 
-    def set_angle(self,leg_id, degrees):
-        self.kit.servo[leg_id].angle = degrees
-
-    def test_pos(self,shoulder,elbow,x,y,z=0,hip=None,right=True):
+    def inverse_positioning(self, shoulder, elbow, x, y, z=0, hip=None, right=True):
+        '''
+        Positions the end effector at a given position based on cartesian coordinates in 
+        centimeter units and with respect to the should motor of the
+        :param shoulder: motor id used for the shoulder
+        :param elbow: motor id used for the elbow
+        :param x: cartesian x with respect to shoulder motor (forward/back)
+        :param y: cartesian y with respect to shoulder motor (up/down)
+        :param z: cartesian z with respect to shoulder motor (left/right)
+        :param hip: motor id used for the hip
+        :param right: a boolean that flips the logic for left and right side to properly map "forward direction"
+        :return: a list containing the appropriate angle for the shoulder and elbow
+        '''
         L=2
         y_prime = -math.sqrt((z+L)**2 + y**2)
         thetaz = math.atan2(z+L,abs(y))-math.atan2(L,abs(y_prime))
@@ -78,86 +107,35 @@ class Quadruped:
             theta_elbow = 50 + self.rad_to_degree(theta_elbow) - elbow_offset
             if hip:
                 theta_hip = 90 + self.rad_to_degree(thetaz)
-        self.kit.servo[shoulder].angle = theta_shoulder
-        self.kit.servo[elbow].angle = theta_elbow
+        self.set_angle(shoulder, theta_shoulder)
+        self.set_angle(elbow, theta_elbow)
         if hip:
-            self.kit.servo[hip].angle = theta_hip
+            self.set_angle(hip, theta_hip)
         # print("theta shoulder:",theta_shoulder,"\ttheta_elbow:",theta_elbow)
         return [theta_shoulder, theta_elbow]
 
-    def test_step(self, cycles=1):
-        # Generate foot tragectory
-        step_nodes = np.asfortranarray([
-            [-4.0, -4.0, 0.0, 0.0],
-            [-15.0, -10, -10, -15.0],
-        ])
-        curve = bezier.Curve(step_nodes, degree=3)
-        s_vals = np.linspace(0.0, 1.0, 20)
-        step = curve.evaluate_multi(s_vals)
+    def leg_position(self, leg_id, x, y, z=0):
+        """
+        wrapper for inverse position that makes it easier to control each leg for making fixed paths
+        :param led_id: string for the leg to be manipulated
+        :param x: cartesian x with respect to shoulder motor (forward/back)
+        :param y: cartesian y with respect to shoulder motor (up/down)
+        :param z: cartesian z with respect to shoulder motor (left/right)
+        """
+        if leg_id == 'FL':
+            self.inverse_positioning(Motor.FL_SHOULDER, Motor.FL_ELBOW, x, y, z=z, hip=Motor.FL_HIP, right=False)
+        if leg_id == 'FR':
+            self.inverse_positioning(Motor.FR_SHOULDER, Motor.FR_ELBOW, x, y, z=z, hip=Motor.FR_HIP, right=True)
+        if leg_id == 'BL':
+            self.inverse_positioning(Motor.BL_SHOULDER, Motor.BL_ELBOW, x, y, right=False)
+        if leg_id == 'BR':
+            self.inverse_positioning(Motor.BR_SHOULDER, Motor.BR_ELBOW, x, y, right=True)
 
-        slide_nodes = np.asfortranarray([
-            [0.0, -4.0],
-            [-15.0, -15.0],
-        ])
-        curve = bezier.Curve(slide_nodes, degree=1)
-        s_vals = np.linspace(0.0, 1.0, 20)
-        slide = curve.evaluate_multi(s_vals)
-
-        foot_motion = step
-        for x,y in zip(slide[0],slide[1]):
-            new_x=np.append(foot_motion[0],x)
-            new_y=np.append(foot_motion[1],y)
-            foot_motion = [new_x,new_y]
-        
-        x = foot_motion[0]
-        y = foot_motion[1]
-        
-        for cycle in range(cycles):
-            for index in range(40):
-                self.test_pos(x[index],y[index],Motor.FR_SHOULDER,Motor.FR_ELBOW,right=True)
-                self.test_pos(x[(index+20)%40],y[(index+20)%40],Motor.BR_SHOULDER,Motor.BR_ELBOW,right=True)
-                self.test_pos(x[(index+20)%40],y[(index+20)%40],Motor.FL_SHOULDER,Motor.FL_ELBOW,right=False)
-                self.test_pos(x[index],y[index],Motor.BL_SHOULDER,Motor.BL_ELBOW,right=False)
-                time.sleep(0.01)
-
-    def rad_to_degree(self,rad):
-        return rad*180/math.pi
-
-    def test_turn(self,cycles=1):
-        # Generate foot tragectory
-        step_nodes = np.asfortranarray([
-            [-4.0, -4.0, 0.0, 0.0],
-            [-15.0, -10, -10, -15.0],
-        ])
-        curve = bezier.Curve(step_nodes, degree=3)
-        s_vals = np.linspace(0.0, 1.0, 20)
-        step = curve.evaluate_multi(s_vals)
-
-        slide_nodes = np.asfortranarray([
-            [0.0, -4.0],
-            [-15.0, -15.0],
-        ])
-        curve = bezier.Curve(slide_nodes, degree=1)
-        s_vals = np.linspace(0.0, 1.0, 20)
-        slide = curve.evaluate_multi(s_vals)
-
-        turn_motion = step
-        for x,y,z in zip(slide[0],slide[1],slide[2]):
-            new_x=np.append(turn_motion[0],x)
-            new_y=np.append(turn_motion[1],y)
-            turn_motion = [new_x,new_y]
-
-        z = turn_motion[0]
-        y = turn_motion[1]
-        for cycle in range(cycles):
-            for index in range(40):
-                    self.test_pos(Motor.FR_SHOULDER,Motor.FR_ELBOW,0,y[index],z=z[index],hip=Motor.FR_HIP,right=True)
-                    self.test_pos(Motor.BR_SHOULDER,Motor.BR_ELBOW,0,y[(index+20)%40],right=True)
-                    self.test_pos(Motor.FL_SHOULDER,Motor.FL_ELBOW,0,y[(index+20)%40],z=-z[(index+20)%40],hip=Motor.FL_HIP,right=False)
-                    self.test_pos(Motor.BL_SHOULDER,Motor.BL_ELBOW,0,y[(index)%40],right=False)
-                    time.sleep(0.02)
-
-    def WASD(self):
+    def move(self, controller=None):
+        """
+        Walks around based on the controller inputed momentum.
+        :param controller: the controller that is called to determine the robot momentum
+        """
         def main(win):
             win.nodelay(True)
             key=""
@@ -209,15 +187,7 @@ class Quadruped:
                 elif key == 'd':
                     if momentum[1] < z_range:
                         momentum[1]+= step_size
-                    
-                # returns to 0
-                # else:
-                #     if momentum[1] > step_size:
-                #         momentum[-1] -= step_size
-                #     elif momentum[1] < -step_size:
-                #         momentum[1] += step_size
-                #     else:
-                #         momentum[1] = 0
+
                 string =  "x: " + str(round(momentum[0],2)) + "   y: " + str(round(momentum[1],2))
                 win.addstr(string)
                 if key == os.linesep:
@@ -229,100 +199,14 @@ class Quadruped:
                 i1 = index%40
                 i2 = (index+20)%40 
                 # Apply movement based movement
-                self.test_pos(Motor.FR_SHOULDER,Motor.FR_ELBOW,x[i1],y[i1]-1,z=z[i1],hip=Motor.FR_HIP,right=True)
-                self.test_pos(Motor.BR_SHOULDER,Motor.BR_ELBOW,x[i2],y[i2],right=True)
-                self.test_pos(Motor.FL_SHOULDER,Motor.FL_ELBOW,x[i2],y[i2]-1,z=-z[i2],hip=Motor.FL_HIP,right=False)
-                self.test_pos(Motor.BL_SHOULDER,Motor.BL_ELBOW,x[i1],y[i1],right=False)
+                self.inverse_positioning(Motor.FR_SHOULDER,Motor.FR_ELBOW,x[i1],y[i1],z=z[i1],hip=Motor.FR_HIP,right=True)
+                self.inverse_positioning(Motor.BR_SHOULDER,Motor.BR_ELBOW,x[i2],y[i2],right=True)
+                self.inverse_positioning(Motor.FL_SHOULDER,Motor.FL_ELBOW,x[i2],y[i2],z=-z[i2],hip=Motor.FL_HIP,right=False)
+                self.inverse_positioning(Motor.BL_SHOULDER,Motor.BL_ELBOW,x[i1],y[i1],right=False)
                 index += 1
-        curses.wrapper(main)  
-
-    def stair(self):
-        def main(win):
-            win.nodelay(True)
-            key=""
-            win.clear()                
-            momentum = np.asarray([0,0,1],dtype=np.float32)
-            string =  "forward: " + str(momentum[0]) + "sideways: " + str(momentum[1])
-            win.addstr(string)
-            key = None
-            step_size = 1
-            index = 1
-            # Generate footstep
-            s_vals = np.linspace(0.0, 1.0, 20)
-            
-            step_nodes = np.asfortranarray([
-                [-1.0, -1.0, 1.0, 1.0],
-                [-1.0, -1.0, 1.0, 1.0],
-                [-16.0, -3, -3, -16.0],
-            ])
-            curve = bezier.Curve(step_nodes, degree=3)
-            step = curve.evaluate_multi(s_vals)
-
-
-            s_vals = np.linspace(0.0, 1.0, 60)
-            slide_nodes = np.asfortranarray([
-                [1.0, -1.0],
-                [1.0, -1.0],
-                [-15.0, -15],
-            ])
-            curve = bezier.Curve(slide_nodes, degree=1)
-            slide = curve.evaluate_multi(s_vals)
-
-            motion = np.concatenate((step,slide), axis=1)
-            x_range = 4
-            z_range = 4
-            while True:
-                try:
-                    key = win.getkey()
-                    curses.flushinp()
-                except:
-                    key = None      
-                win.clear()
-                if key == 'w':
-                    if momentum[0] < x_range:
-                        momentum[0]+= step_size
-                elif key == 's':
-                    if momentum[0] > -x_range:
-                        momentum[0]-= step_size
-                if key == 'a':
-                    if momentum[1] > -z_range:
-                        momentum[1]-= step_size
-                elif key == 'd':
-                    if momentum[1] < z_range:
-                        momentum[1]+= step_size
-                    
-                # returns to 0
-                # else:
-                #     if momentum[1] > step_size:
-                #         momentum[-1] -= step_size
-                #     elif momentum[1] < -step_size:
-                #         momentum[1] += step_size
-                #     else:
-                #         momentum[1] = 0
-                string =  "x: " + str(round(momentum[0],2)) + "   y: " + str(round(momentum[1],2))
-                win.addstr(string)
-                if key == os.linesep:
-                    break 
-                
-                tragectory = motion * momentum[:, None]
-                x,z,y = tragectory
-                # 
-                i1 = index%80
-                i2 = (index+20)%80 
-                i3 = (index+40)%80 
-                i4 = (index+60)%80 
-                # Apply movement based movement
-                self.test_pos(Motor.FR_SHOULDER,Motor.FR_ELBOW,x[i1],y[i1],z=z[i1],hip=Motor.FR_HIP,right=True)
-                self.test_pos(Motor.BR_SHOULDER,Motor.BR_ELBOW,x[i2],y[i2]-1,right=True)
-                self.test_pos(Motor.FL_SHOULDER,Motor.FL_ELBOW,x[i3],y[i3],z=-z[i3],hip=Motor.FL_HIP,right=False)
-                self.test_pos(Motor.BL_SHOULDER,Motor.BL_ELBOW,x[i4],y[i4]-1,right=False)
-                index += 1
-                time.sleep(0.01)
-        curses.wrapper(main)   
-
+        curses.wrapper(main) 
 
 if __name__ == "__main__":
     r = Quadruped()
     r.calibrate()
-    r.WASD()
-    # r.stair()
+    r.move()
