@@ -1,11 +1,8 @@
 from adafruit_servokit import ServoKit
 from enum import IntEnum
-import time
 import math
 import bezier
 import numpy as np
-import curses
-import os
 
 class Motor(IntEnum):
     # identifies the corresponding pin location with the motor location
@@ -77,7 +74,6 @@ class Quadruped:
         L=2
         y_prime = -math.sqrt((z+L)**2 + y**2)
         thetaz = math.atan2(z+L,abs(y))-math.atan2(L,abs(y_prime))
-        print(thetaz/math.pi*180)
 
         elbow_offset = 20
         shoulder_offset = 10
@@ -130,83 +126,46 @@ class Quadruped:
             self.inverse_positioning(Motor.BL_SHOULDER, Motor.BL_ELBOW, x, y, right=False)
         if leg_id == 'BR':
             self.inverse_positioning(Motor.BR_SHOULDER, Motor.BR_ELBOW, x, y, right=True)
-
+    
     def move(self, controller=None):
         """
-        Walks around based on the controller inputed momentum.
+        Walks around based on the controller inputed momentum
         :param controller: the controller that is called to determine the robot momentum
+        :returns: None, enters an infinite loop 
         """
-        def main(win):
-            win.nodelay(True)
-            key=""
-            win.clear()                
-            momentum = np.asarray([0,0,1],dtype=np.float32)
-            string =  "forward: " + str(momentum[0]) + "sideways: " + str(momentum[1])
-            win.addstr(string)
-            key = None
-            step_size = 1
-            index = 1
-            # Generate footstep
-            s_vals = np.linspace(0.0, 1.0, 20)
-            
-            step_nodes = np.asfortranarray([
-                [-1.0, -1.0, 1.0, 1.0],
-                [-1.0, -1.0, 1.0, 1.0],
-                [-15.0, -10, -10, -15.0],
-            ])
-            curve = bezier.Curve(step_nodes, degree=3)
-            step = curve.evaluate_multi(s_vals)
+        momentum = np.asarray([0,0,1],dtype=np.float32)
+        index = 0
+        
+        # Generate footstep
+        s_vals = np.linspace(0.0, 1.0, 20)
+        step_nodes = np.asfortranarray([
+            [-1.0, -1.0, 1.0, 1.0],
+            [-1.0, -1.0, 1.0, 1.0],
+            [-15.0, -10, -10, -15.0],
+        ])
+        curve = bezier.Curve(step_nodes, degree=3)
+        step = curve.evaluate_multi(s_vals)
+        slide_nodes = np.asfortranarray([
+            [1.0, -1.0],
+            [1.0, -1.0],
+            [-15.0, -15],
+        ])
+        curve = bezier.Curve(slide_nodes, degree=1)
+        slide = curve.evaluate_multi(s_vals)
 
-            slide_nodes = np.asfortranarray([
-                [1.0, -1.0],
-                [1.0, -1.0],
-                [-15.0, -15],
-            ])
-            curve = bezier.Curve(slide_nodes, degree=1)
-            slide = curve.evaluate_multi(s_vals)
+        motion = np.concatenate((step,slide), axis=1)
 
-            motion = np.concatenate((step,slide), axis=1)
-            x_range = 4
-            z_range = 4
-            while True:
-                try:
-                    key = win.getkey()
-                    curses.flushinp()
-                except:
-                    key = None      
-                win.clear()
-                if key == 'w':
-                    if momentum[0] < x_range:
-                        momentum[0]+= step_size
-                elif key == 's':
-                    if momentum[0] > -x_range:
-                        momentum[0]-= step_size
-                if key == 'a':
-                    if momentum[1] > -z_range:
-                        momentum[1]-= step_size
-                elif key == 'd':
-                    if momentum[1] < z_range:
-                        momentum[1]+= step_size
+        while True:
+            momentum = controller(momentum)
+            tragectory = motion * momentum[:, None]
+            x,z,y = tragectory
+            # 
+            i1 = index%40
+            i2 = (index+20)%40 
+            # Apply movement based movement
+            self.inverse_positioning(Motor.FR_SHOULDER,Motor.FR_ELBOW,x[i1],y[i1],z=z[i1],hip=Motor.FR_HIP,right=True)
+            self.inverse_positioning(Motor.BR_SHOULDER,Motor.BR_ELBOW,x[i2],y[i2],right=True)
+            self.inverse_positioning(Motor.FL_SHOULDER,Motor.FL_ELBOW,x[i2],y[i2],z=-z[i2],hip=Motor.FL_HIP,right=False)
+            self.inverse_positioning(Motor.BL_SHOULDER,Motor.BL_ELBOW,x[i1],y[i1],right=False)
+            index += 1
 
-                string =  "x: " + str(round(momentum[0],2)) + "   y: " + str(round(momentum[1],2))
-                win.addstr(string)
-                if key == os.linesep:
-                    break 
-                
-                tragectory = motion * momentum[:, None]
-                x,z,y = tragectory
-                # 
-                i1 = index%40
-                i2 = (index+20)%40 
-                # Apply movement based movement
-                self.inverse_positioning(Motor.FR_SHOULDER,Motor.FR_ELBOW,x[i1],y[i1],z=z[i1],hip=Motor.FR_HIP,right=True)
-                self.inverse_positioning(Motor.BR_SHOULDER,Motor.BR_ELBOW,x[i2],y[i2],right=True)
-                self.inverse_positioning(Motor.FL_SHOULDER,Motor.FL_ELBOW,x[i2],y[i2],z=-z[i2],hip=Motor.FL_HIP,right=False)
-                self.inverse_positioning(Motor.BL_SHOULDER,Motor.BL_ELBOW,x[i1],y[i1],right=False)
-                index += 1
-        curses.wrapper(main) 
-
-if __name__ == "__main__":
-    r = Quadruped()
-    r.calibrate()
-    r.move()
