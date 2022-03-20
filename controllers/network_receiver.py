@@ -1,6 +1,7 @@
 import numpy as np
 import socket
-from utils.ip_helper import create_socket_connection
+
+from controllers.utils.ip_helper import create_socket_connection
 
 s = create_socket_connection()
 
@@ -15,8 +16,7 @@ def controller(momentum):
     return momentum
 
 if __name__ == "__main__":
-    import numpy as np
-
+    # Test network commands by printing out the momentum changes
     momentum = np.asarray([0,0,1,0],dtype=np.float32)
     lm = momentum
     while True:

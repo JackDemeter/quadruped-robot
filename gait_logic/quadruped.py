@@ -129,11 +129,11 @@ class Quadruped:
     
     def move(self, controller=None):
         """
-        Walks around based on the controller inputed momentum
+        Walks around based on the controller inputted momentum
         :param controller: the controller that is called to determine the robot momentum
         :returns: None, enters an infinite loop 
         """
-        momentum = np.asarray([0,0,1],dtype=np.float32)
+        momentum = np.asarray([0,0,1,0],dtype=np.float32)
         index = 0
         
         # Generate footstep
@@ -155,17 +155,20 @@ class Quadruped:
 
         motion = np.concatenate((step,slide), axis=1)
 
-        while True:
+        close = False
+        while not close:
             momentum = controller(momentum)
-            tragectory = motion * momentum[:, None]
+            tragectory = motion * momentum[:3, None]
+            if momentum[3]:
+                close = True
             x,z,y = tragectory
             # 
             i1 = index%40
             i2 = (index+20)%40 
             # Apply movement based movement
-            self.inverse_positioning(Motor.FR_SHOULDER,Motor.FR_ELBOW,x[i1],y[i1],z=z[i1],hip=Motor.FR_HIP,right=True)
-            self.inverse_positioning(Motor.BR_SHOULDER,Motor.BR_ELBOW,x[i2],y[i2],right=True)
-            self.inverse_positioning(Motor.FL_SHOULDER,Motor.FL_ELBOW,x[i2],y[i2],z=-z[i2],hip=Motor.FL_HIP,right=False)
-            self.inverse_positioning(Motor.BL_SHOULDER,Motor.BL_ELBOW,x[i1],y[i1],right=False)
+            self.inverse_positioning(Motor.FR_SHOULDER,Motor.FR_ELBOW,x[i1],y[i1]-1,z=z[i1],hip=Motor.FR_HIP,right=True)
+            self.inverse_positioning(Motor.BR_SHOULDER,Motor.BR_ELBOW,x[i2],y[i2]+2,right=True)
+            self.inverse_positioning(Motor.FL_SHOULDER,Motor.FL_ELBOW,x[i2],y[i2]-1,z=-z[i2],hip=Motor.FL_HIP,right=False)
+            self.inverse_positioning(Motor.BL_SHOULDER,Motor.BL_ELBOW,x[i1],y[i1]+2,right=False)
             index += 1
 
