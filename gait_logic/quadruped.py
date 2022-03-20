@@ -129,7 +129,7 @@ class Quadruped:
     
     def move(self, controller=None):
         """
-        Walks around based on the controller inputed momentum
+        Walks around based on the controller inputted momentum
         :param controller: the controller that is called to determine the robot momentum
         :returns: None, enters an infinite loop 
         """

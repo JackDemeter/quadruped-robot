@@ -16,8 +16,7 @@ def controller(momentum):
     return momentum
 
 if __name__ == "__main__":
-    import numpy as np
-
+    # Test network commands by printing out the momentum changes
     momentum = np.asarray([0,0,1,0],dtype=np.float32)
     lm = momentum
     while True:

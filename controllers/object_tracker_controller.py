@@ -1,3 +1,12 @@
+"""
+This program takes input from an imagezmq Image hub connection and attaches then sends a numpy momentum array
+to a targetted IP/Port.
+
+This is a modified version of object_tracker.py from the yolov4-deepsort-base project (https://github.com/theAIGuysCode/yolov4-deepsort)
+it should be placed in that repository to be used.
+"""
+
+
 import os
 import time
 import imagezmq

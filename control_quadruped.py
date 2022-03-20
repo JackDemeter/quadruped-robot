@@ -10,7 +10,7 @@ def get_controller(controller_file):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--controller', default='controllers.network_controller')
+    parser.add_argument('--controller', default='controllers.network_receiver')
     args = parser.parse_args()
 
     controller = get_controller(args.controller)
