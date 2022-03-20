@@ -1,15 +1,16 @@
 import socket
 import numpy as np
-from array import array
-from utils.ip_helper import get_ip 
+import argparse
+import keyboard
 
+from utils.ip_helper import create_socket_connection 
 
-def controller(pi_ip, pi_port, accel = 0.02, bound=4, return_to_zero=False):
+def controller(pi_ip, pi_port, accel = 0.002, bound=4, return_to_zero=False):
 
     s = create_socket_connection()
 
     server = (pi_ip, pi_port)
-    momentum = np.array([0,0,1,0]) # Control [x,z,y,quit] telemetry
+    momentum = np.array([0.,0.,1.,0.]) # Control [x,z,y,quit] telemetry
     close = False
     while not close:
         moved = False
@@ -34,22 +35,23 @@ def controller(pi_ip, pi_port, accel = 0.02, bound=4, return_to_zero=False):
         if return_to_zero and not moved:
             moved = True
             if momentum[0] > 0:
-                momentum[0] -= accel
+                momentum[0] = momentum[0]-accel
             elif momentum[0] < 0:
-                momentum[0] += accel
+                momentum[0] = momentum[0]+accel
             if momentum[1] > 0:
-                momentum[1] -= accel
+                momentum[1] = momentum[1]-accel
             elif momentum[1] < 0:
-                momentum[1] += accel
+                momentum[1] = momentum[1]+accel
         if moved:
             s.sendto(momentum.tobytes(), server)
+            print(momentum)
     s.close()
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('pi_ip')
     parser.add_argument('pi_port', type=int) 
-    parser.add_argument('--accel', type=float, default=0.02)
+    parser.add_argument('--accel', type=float, default=0.002)
     parser.add_argument('--bound', type=int, default=4)
     parser.add_argument('--return_to_zero', action='store_true')
     args = parser.parse_args()

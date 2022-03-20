@@ -1,6 +1,7 @@
 import numpy as np
 import socket
-from utils.ip_helper import create_socket_connection
+
+from controllers.utils.ip_helper import create_socket_connection
 
 s = create_socket_connection()
 
